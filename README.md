@@ -864,7 +864,7 @@ FixIt Hub is developed by a multidisciplinary team focused on scalable backend s
 ### Members :
 
 - Repo Owner : [**Rijul Singh**](https://github.com//Rijuls-code)
-- Backend : [Shreyas Patil](https://github.com//Shreyas-patil07)
+- Member : [Shreyas Patil](https://github.com//Shreyas-patil07)
 - Member : [Vedant Sawant](https://github.com//vedantsawant2803-cloud)
 - Member : [Nidhi Nikam](https://github.com//Nidhi194)
 
@@ -965,5 +965,6 @@ issues_resolved_total{ward="K_EAST"}
 ## 📄 License
 
 MIT License
+
 
 
