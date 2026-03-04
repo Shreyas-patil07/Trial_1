@@ -93,7 +93,7 @@ The platform transforms raw citizen complaints into structured, actionable intel
 
 ### 3.1 Architecture Overview
 
-The system follows a modern three-tier cloud-native architecture deployed on AWS:
+The system follows a modern three-tier cloud-native architecture deployed on Vercel (frontend), Render (backend), and Appwrite Cloud (backend services):
 
 ```mermaid
 flowchart LR
@@ -774,8 +774,8 @@ def auto_assign_issue(issue_id, latitude, longitude):
         
         return True
     else:
-        # Fallback: Assign to admin for manual routing
-        assign_to_admin(issue_id)
+        # Fallback: Assign to officer for manual routing
+        assign_to_officer(issue_id)
         return False
 ```
 
@@ -819,31 +819,44 @@ def auto_assign_issue(issue_id, latitude, longitude):
 #### 4.2.1 User Roles
 
 - **Public/Citizen**: Can report issues, view status, reopen resolved issues, view public dashboards
-- **Government Officer**: Can resolve issues, upload proof, view analytics, manage territory, customize and schedule reports
+- **Government Officer**: Can choose location to view nearby issues, resolve issues, upload proof, view analytics, customize and schedule reports
 
 #### 4.2.2 Registration & Authentication
 
 - **Citizen Registration**:
-  - Email/phone number
-  - Password (bcrypt hashed)
-  - Name and location
+  - Email (required, unique)
+  - Full name (required)
+  - Mobile number (required, unique)
+  - Password (required, minimum 8 characters, bcrypt hashed)
   - Phone verification via OTP
-  - Optional: Aadhaar verification for verified badge
 
 - **Officer Registration**:
-  - Government email domain verification
-  - Department and ward assignment
-  - Officer approval by existing officer or self-registration with verification
-  - Verified badge upon approval
-  - Territory assignment
+  - Email (required, unique, government domain preferred)
+  - Full name (required)
+  - Mobile number (required, unique)
+  - Password (required, minimum 8 characters, bcrypt hashed)
+  - Department (required)
+  - Phone verification via OTP
+  - Officer approval by existing officer or admin verification
 
 #### 4.2.3 Authentication Mechanism
 
-- **JWT-based authentication**
+**Login Options:**
+- **Email/Phone + Password**: Traditional login with JWT tokens
+- **Email/Phone + OTP**: One-time password sent via SMS for passwordless login
+
+**Token Management:**
 - Access token (15 min expiry)
 - Refresh token (7 day expiry)
 - Secure HTTP-only cookies
 - Role-based access control (RBAC)
+
+**OTP Login Flow:**
+1. User enters email or phone number
+2. System sends 6-digit OTP via SMS (valid for 10 minutes)
+3. User enters OTP
+4. System validates OTP and issues JWT tokens
+5. OTP is invalidated after successful login or expiry
 
 #### 4.2.4 Spam & Abuse Prevention
 
@@ -868,7 +881,7 @@ class SpamPreventionService:
         
         # 3. Reputation score
         if user.reputation_score < 0.3:
-            return False, "Low reputation - requires admin review"
+            return False, "Low reputation - requires officer review"
         
         # 4. Duplicate content detection
         if self.detect_duplicate_content(issue):
@@ -1262,7 +1275,7 @@ Generate a 200-300 word executive summary in professional tone.
 2. If translation fails: Store original text, flag for manual review
 3. If classification fails: Assign "Other" category
 4. If summary fails: Generate template-based summary
-5. Log all failures to CloudWatch for monitoring
+5. Log all failures to Render Logs for monitoring
 
 **Error Logging**:
 ```python
@@ -1426,8 +1439,8 @@ FROM current_week, previous_week;
 
 **Scheduling Options**:
 
-- **AWS EventBridge**: Cron expression `cron(0 2 ? * MON *)` (Every Monday 2 AM IST)
-- **Alternative**: Celery Beat for self-hosted scheduling
+- **Celery Beat**: Cron-style scheduling for recurring tasks (Every Monday 2 AM IST)
+- **Configuration**: Celery beat schedule with crontab expressions
 
 #### 4.6.2 Report Generation Process
 
@@ -1544,7 +1557,7 @@ The system uses Appwrite Database (NoSQL document database) with the following c
   "email": "string (unique, indexed)",
   "phone": "string (optional)",
   "full_name": "string",
-  "role": "string (citizen|officer|admin)",
+  "role": "string (citizen|officer)",
   "is_verified": "boolean",
   "department": "string (optional)",
   "ward_assigned": "string (optional)",
@@ -1801,7 +1814,7 @@ image: [file upload]
   "latitude": 12.9716,
   "longitude": 77.5946,
   "ward": "Ward 23 - Koramangala",
-  "image_url": "https://s3.amazonaws.com/...",
+  "image_url": "https://cloud.appwrite.io/v1/storage/buckets/issue-images/files/[file-id]/view",
   "reported_by": "uuid",
   "created_at": "2026-02-15T10:30:00Z"
 }
@@ -1842,7 +1855,7 @@ GET /api/v1/issues?status=OPEN&ward=Ward%2023&page=1&limit=20
       "status": "OPEN",
       "ward": "Ward 23 - Koramangala",
       "created_at": "2026-02-15T10:30:00Z",
-      "image_url": "https://s3.amazonaws.com/..."
+      "image_url": "https://cloud.appwrite.io/v1/storage/buckets/issue-images/files/[file-id]/view"
     }
   ]
 }
@@ -1865,7 +1878,7 @@ Get detailed information about a specific issue.
   "longitude": 77.5946,
   "address": "MG Road, Koramangala, Bangalore",
   "ward": "Ward 23 - Koramangala",
-  "image_url": "https://s3.amazonaws.com/...",
+  "image_url": "https://cloud.appwrite.io/v1/storage/buckets/issue-images/files/[file-id]/view",
   "reported_by": {
     "id": "uuid",
     "name": "Rajesh Kumar",
@@ -1906,7 +1919,7 @@ proof_image: [file upload]
     "name": "Officer Sharma",
     "department": "Public Works"
   },
-  "resolution_proof_url": "https://s3.amazonaws.com/...",
+  "resolution_proof_url": "https://cloud.appwrite.io/v1/storage/buckets/resolution-proofs/files/[file-id]/view",
   "resolution_notes": "Pothole filled with asphalt on 15th Feb"
 }
 ```
@@ -2019,7 +2032,7 @@ Get high-risk zones based on risk scoring.
 
 #### POST /api/v1/reports/generate
 
-Generate a new weekly report (Admin only).
+Generate a new weekly report (Officer only).
 
 **Request**:
 ```json
@@ -2157,16 +2170,18 @@ All API errors follow a consistent format:
 
 **Permission Matrix**:
 
-| Action | Citizen | Officer | Admin |
-|--------|---------|---------|-------|
-| Report Issue | ✓ | ✓ | ✓ |
-| View Own Issues | ✓ | ✓ | ✓ |
-| View All Issues | ✗ | ✓ | ✓ |
-| Resolve Issue | ✗ | ✓ | ✓ |
-| Reopen Issue | ✓ (own) | ✗ | ✓ |
-| View Analytics | Limited | ✓ | ✓ |
-| Generate Reports | ✗ | ✗ | ✓ |
-| Manage Users | ✗ | ✗ | ✓ |
+| Action | Citizen | Officer |
+|--------|---------|---------|
+| Report Issue | ✓ | ✓ |
+| View Own Issues | ✓ | ✓ |
+| View All Issues | ✗ | ✓ |
+| Resolve Issue | ✗ | ✓ |
+| Reopen Issue | ✓ (own) | ✗ |
+| View Analytics | Limited | ✓ |
+| Generate Reports | ✗ | ✓ |
+| Customize Reports | ✗ | ✓ |
+| Manage Territories | ✗ | ✓ |
+| Manage Users | ✗ | ✓ |
 
 ### 7.2 Input Validation
 
@@ -2203,7 +2218,7 @@ class IssueCreate(BaseModel):
 - Issue Creation: 10 requests/hour per user
 - Issue Listing: 100 requests/minute
 - Analytics: 50 requests/minute
-- Report Generation: 1 request/hour (admin only)
+- Report Generation: 1 request/hour (officer only)
 
 **Implementation**: Redis-based token bucket algorithm
 
@@ -2224,7 +2239,7 @@ All sensitive operations logged:
 - Issue status changes
 - Resolution actions
 - Report generation
-- Admin actions
+- Officer actions
 
 ### 7.5 Scalability Considerations
 
@@ -2232,7 +2247,7 @@ All sensitive operations logged:
 
 - **Backend**: Stateless FastAPI instances behind load balancer
 - **Database**: Read replicas for analytics queries
-- **Storage**: S3 auto-scales
+- **Storage**: Appwrite Storage auto-scales
 - **Caching**: Redis for session management and rate limiting
 
 #### 7.5.2 Performance Targets
@@ -2256,16 +2271,16 @@ All sensitive operations logged:
 
 #### 7.6.1 High Availability
 
-- **Multi-AZ Deployment**: RDS and EC2 across availability zones
-- **Auto-Scaling**: EC2 Auto Scaling Groups
-- **Health Checks**: ALB health checks every 30 seconds
-- **Failover**: Automatic RDS failover < 2 minutes
+- **Multi-Region Deployment**: Appwrite Cloud and Render across regions
+- **Auto-Scaling**: Render auto-scaling for backend instances
+- **Health Checks**: Render health checks every 30 seconds
+- **Failover**: Automatic database failover < 2 minutes
 
 #### 7.6.2 Backup & Recovery
 
 - **Database Backups**: Automated daily backups, 7-day retention
 - **Point-in-Time Recovery**: 5-minute granularity
-- **S3 Versioning**: Enabled for all buckets
+- **Appwrite Storage Versioning**: Enabled for all buckets
 - **Disaster Recovery**: Cross-region replication (optional)
 
 #### 7.6.3 Error Handling
@@ -2277,32 +2292,33 @@ All sensitive operations logged:
 
 ### 7.7 Monitoring & Logging
 
-#### 7.7.1 CloudWatch Metrics
+#### 7.7.1 Prometheus Metrics
 
 - **Application Metrics**:
-  - Request count and latency
-  - Error rates by endpoint
-  - AI processing success rate
-  - Database connection pool usage
+  - Request count and latency (http_request_duration_seconds)
+  - Error rates by endpoint (http_requests_total)
+  - AI processing success rate (ai_processing_success_rate)
+  - Database connection pool usage (db_connection_pool_size)
 
 - **Infrastructure Metrics**:
-  - CPU and memory utilization
-  - Network throughput
-  - Disk I/O
-  - RDS performance insights
+  - CPU and memory utilization (process_cpu_usage, process_memory_bytes)
+  - Network throughput (network_bytes_sent, network_bytes_received)
+  - Celery queue length (celery_queue_length)
+  - Redis cache hit rate (redis_cache_hits_total)
 
 #### 7.7.2 Alerting
 
-- **Critical Alerts** (PagerDuty/SNS):
+- **Critical Alerts** (Email/Slack):
   - API error rate > 5%
   - Database connection failures
-  - S3 upload failures > 10%
+  - Appwrite Storage upload failures > 10%
   - AI service unavailable > 5 minutes
 
 - **Warning Alerts** (Email):
   - High response times (> 500ms)
   - Disk usage > 80%
   - Unusual traffic patterns
+  - Celery queue backlog > 1000 tasks
 
 #### 7.7.3 Structured Logging
 
@@ -2325,33 +2341,133 @@ logger.info(
 
 ## 8. Deployment Design
 
-### 8.1 Infrastructure as Code
+### 8.1 Infrastructure Configuration
 
-#### 8.1.1 AWS CloudFormation / Terraform
+#### 8.1.1 Vercel Configuration (Frontend)
 
-Define infrastructure as code for reproducible deployments:
-
-```hcl
-# Example Terraform structure
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+```json
+// vercel.json
+{
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
+  "env": {
+    "VITE_APPWRITE_ENDPOINT": "@appwrite-endpoint",
+    "VITE_APPWRITE_PROJECT_ID": "@appwrite-project-id",
+    "VITE_APPWRITE_DATABASE_ID": "@appwrite-database-id",
+    "VITE_APPWRITE_BUCKET_ID": "@appwrite-bucket-id"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-XSS-Protection",
+          "value": "1; mode=block"
+        }
+      ]
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "https://fixit-hub-api.onrender.com/api/$1"
+    }
+  ]
 }
+```
 
-resource "aws_rds_instance" "postgres" {
-  engine               = "postgres"
-  engine_version       = "15.4"
-  instance_class       = "db.t3.medium"
-  allocated_storage    = 100
-  multi_az             = true
-  backup_retention_period = 7
-}
+#### 8.1.2 Render Configuration (Backend)
 
-resource "aws_s3_bucket" "issues" {
-  bucket = "fixit-hub-issues"
-  versioning {
-    enabled = true
-  }
-}
+```yaml
+# render.yaml
+services:
+  - type: web
+    name: fixit-hub-api
+    env: python
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
+      - key: APPWRITE_ENDPOINT
+        sync: false
+      - key: APPWRITE_PROJECT_ID
+        sync: false
+      - key: APPWRITE_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: fixit-hub-postgres
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: fixit-hub-redis
+          type: redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SECRET_KEY
+        generateValue: true
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+
+  - type: worker
+    name: fixit-hub-celery-worker
+    env: python
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A tasks.celery_app worker --loglevel=info --concurrency=4
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: fixit-hub-redis
+          type: redis
+          property: connectionString
+      - key: APPWRITE_ENDPOINT
+        sync: false
+      - key: APPWRITE_PROJECT_ID
+        sync: false
+      - key: APPWRITE_API_KEY
+        sync: false
+
+  - type: worker
+    name: fixit-hub-celery-beat
+    env: python
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A tasks.celery_app beat --loglevel=info
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          name: fixit-hub-redis
+          type: redis
+          property: connectionString
+
+databases:
+  - name: fixit-hub-postgres
+    databaseName: fixit_hub
+    user: fixit_admin
+    plan: starter
+    postgresMajorVersion: 15
+    ipAllowList: []
+
+  - name: fixit-hub-redis
+    plan: starter
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 ```
 
 ### 8.2 Containerization
@@ -2385,17 +2501,19 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql://user:pass@db:5432/citizen_reporter
-      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - DATABASE_URL=postgresql://user:pass@db:5432/fixit_hub
+      - APPWRITE_ENDPOINT=${APPWRITE_ENDPOINT}
+      - APPWRITE_PROJECT_ID=${APPWRITE_PROJECT_ID}
+      - APPWRITE_API_KEY=${APPWRITE_API_KEY}
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - db
       - redis
 
   db:
-    image: postgres:15
+    image: postgis/postgis:15-3.4
     environment:
-      - POSTGRES_DB=citizen_reporter
+      - POSTGRES_DB=fixit_hub
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=pass
     volumes:
@@ -2406,76 +2524,81 @@ services:
     ports:
       - "6379:6379"
 
+  celery_worker:
+    build: ./backend
+    command: celery -A tasks.celery_app worker --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - APPWRITE_ENDPOINT=${APPWRITE_ENDPOINT}
+      - APPWRITE_PROJECT_ID=${APPWRITE_PROJECT_ID}
+      - APPWRITE_API_KEY=${APPWRITE_API_KEY}
+    depends_on:
+      - redis
+
+  celery_beat:
+    build: ./backend
+    command: celery -A tasks.celery_app beat --loglevel=info
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+    depends_on:
+      - redis
+
 volumes:
   postgres_data:
 ```
 
-### 8.3 AWS Deployment Strategy
-
-#### 8.3.1 Option A: EC2 with Auto Scaling
+### 8.3 Deployment Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                    Route 53 (DNS)                       │
+│                  Vercel Edge Network                     │
+│            (Frontend - React + Vite PWA)                │
+│       Global CDN with 99.99% uptime SLA                 │
 └────────────────────┬────────────────────────────────────┘
-                     │
+                     │ HTTPS
 ┌────────────────────▼────────────────────────────────────┐
-│              CloudFront (CDN)                           │
-│              - Frontend (S3)                            │
-└────────────────────┬────────────────────────────────────┘
-                     │
-┌────────────────────▼────────────────────────────────────┐
-│        Application Load Balancer (ALB)                  │
+│              Render Load Balancer                        │
+│         (Auto-scaling, Health Checks)                   │
 └────────┬───────────────────────────────────────┬────────┘
          │                                       │
 ┌────────▼────────┐                    ┌────────▼────────┐
-│  EC2 Instance   │                    │  EC2 Instance   │
+│  Render Web     │                    │  Render Web     │
+│  Service        │                    │  Service        │
 │  (FastAPI)      │                    │  (FastAPI)      │
-│  AZ-1           │                    │  AZ-2           │
+│  Instance 1     │                    │  Instance 2     │
 └─────────────────┘                    └─────────────────┘
          │                                       │
          └───────────────┬───────────────────────┘
                          │
-                ┌────────▼────────┐
-                │   RDS Primary   │
-                │   (Multi-AZ)    │
-                └────────┬────────┘
-                         │
-                ┌────────▼────────┐
-                │  RDS Replica    │
-                │  (Read-only)    │
-                └─────────────────┘
+        ┌────────────────┼────────────────┐
+        │                │                │
+┌───────▼──────┐  ┌──────▼──────┐  ┌────▼─────┐
+│  Appwrite    │  │ PostgreSQL  │  │  Redis   │
+│  Cloud       │  │ + PostGIS   │  │  Cloud   │
+│  - Auth      │  │ (Render)    │  │          │
+│  - NoSQL DB  │  │             │  │  Queue   │
+│  - Storage   │  │ Territories │  │  Cache   │
+└──────────────┘  └─────────────┘  └──────────┘
 ```
 
 **Components**:
 
-- **Route 53**: DNS management
-- **CloudFront**: CDN for frontend
-- **S3**: Static website hosting
-- **ALB**: Load balancing and SSL termination
-- **EC2 Auto Scaling Group**: 2-10 instances
-- **RDS Multi-AZ**: High availability database
-- **ElastiCache Redis**: Session and cache management
-
-#### 8.3.2 Option B: AWS App Runner (Simplified)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│              AWS App Runner Service                     │
-│              - Auto-scaling                             │
-│              - Built-in load balancing                  │
-│              - Automatic deployments                    │
-└────────────────────┬────────────────────────────────────┘
-                     │
-         ┌───────────┴───────────┐
-         │                       │
-┌────────▼────────┐    ┌────────▼────────┐
-│   RDS Primary   │    │   S3 Buckets    │
-│   (Multi-AZ)    │    │   - Images      │
-└─────────────────┘    └─────────────────┘
-```
+- **Vercel**: Frontend hosting with edge CDN and automatic SSL
+- **Render Load Balancer**: Traffic distribution and health checks
+- **Render Web Services**: Auto-scaling FastAPI instances (2-10)
+- **Render Workers**: Celery workers for background processing
+- **Appwrite Cloud**: Authentication, NoSQL database, file storage
+- **Render PostgreSQL**: Geospatial data with PostGIS extension
+- **Redis Cloud**: Task queue and caching layer
 
 **Advantages**:
+
+- Zero-downtime deployments
+- Automatic SSL/TLS certificates
+- Built-in DDoS protection
+- Automatic container builds
+- No infrastructure management
+- Cost-effective for startups ($50-200/month)
 
 - Simplified deployment
 - Automatic scaling
@@ -2503,32 +2626,31 @@ jobs:
           pip install -r requirements.txt
           pytest tests/
 
-  build:
+  deploy-frontend:
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Build Docker image
-        run: docker build -t fixit-hub:${{ github.sha }} .
-      - name: Push to ECR
+      - name: Deploy to Vercel
         run: |
-          aws ecr get-login-password | docker login --username AWS --password-stdin
-          docker push fixit-hub:${{ github.sha }}
+          npm install -g vercel
+          cd client
+          vercel --prod --token=${{ secrets.VERCEL_TOKEN }}
 
-  deploy:
-    needs: build
+  deploy-backend:
+    needs: test
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to EC2
+      - name: Trigger Render Deployment
         run: |
-          aws ecs update-service --cluster prod --service backend --force-new-deployment
+          curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
 ```
 
 #### 8.4.2 Deployment Stages
 
-1. **Development**: Auto-deploy on push to `dev` branch
+1. **Development**: Auto-deploy on push to `dev` branch (Vercel preview + Render dev environment)
 2. **Staging**: Auto-deploy on push to `staging` branch
-3. **Production**: Manual approval + deploy on push to `main`
+3. **Production**: Auto-deploy on push to `main` branch (with automatic rollback on health check failure)
 
 ### 8.5 Environment Configuration
 
@@ -2536,53 +2658,70 @@ jobs:
 
 ```bash
 # Database
-DATABASE_URL=postgresql://user:pass@host:5432/db
+DATABASE_URL=postgresql://user:pass@host:5432/fixit_hub
 DATABASE_POOL_SIZE=20
 
-# AWS
-AWS_REGION=ap-south-1
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-S3_BUCKET_ISSUES=fixit-hub-issues
-S3_BUCKET_RESOLUTIONS=fixit-hub-resolutions
+# Appwrite
+APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
+APPWRITE_PROJECT_ID=your_project_id
+APPWRITE_API_KEY=your_api_key
+APPWRITE_DATABASE_ID=your_database_id
+APPWRITE_ISSUES_COLLECTION_ID=your_collection_id
+APPWRITE_USERS_COLLECTION_ID=your_users_collection_id
+APPWRITE_BUCKET_ID=your_bucket_id
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+CELERY_BROKER_URL=redis://localhost:6379/0
+CELERY_RESULT_BACKEND=redis://localhost:6379/1
 
 # AI Service
-AI_SERVICE_PROVIDER=bedrock  # or openai
+AI_SERVICE_PROVIDER=bedrock  # or openai, anthropic
 BEDROCK_MODEL_ID=anthropic.claude-v2
 OPENAI_API_KEY=sk-...
+AI_API_KEY=your_ai_api_key
 
 # Security
 JWT_SECRET_KEY=...
 JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=15
 REFRESH_TOKEN_EXPIRE_DAYS=7
+SECRET_KEY=your_secret_key
 
 # Application
 ENVIRONMENT=production
 LOG_LEVEL=INFO
 CORS_ORIGINS=https://fixithub.gov.in
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=100
+DAILY_ISSUE_LIMIT=10
+
+# Monitoring
+PROMETHEUS_PORT=9090
+GRAFANA_PORT=3000
 ```
 
 ### 8.6 Cost Estimation (Monthly)
 
-**AWS Services** (Estimated for 100,000 monthly active users):
+**Cloud Services** (Estimated for 100,000 monthly active users):
 
 | Service | Configuration | Monthly Cost (USD) |
 |---------|--------------|-------------------|
-| EC2 (t3.medium × 4) | 4 instances, 24/7 | $120 |
-| RDS PostgreSQL (db.t3.medium) | Multi-AZ, 100GB | $150 |
-| S3 Storage | 500GB storage, 1TB transfer | $30 |
-| CloudFront | 1TB data transfer | $85 |
-| Application Load Balancer | 24/7 operation | $25 |
-| ElastiCache Redis (cache.t3.micro) | Single node | $15 |
-| CloudWatch | Logs and metrics | $20 |
+| Vercel Pro | Frontend hosting, CDN | $20 |
+| Render Starter (Web) | 2-4 instances, auto-scaling | $28-56 |
+| Render Starter (Workers) | 2 Celery workers | $14 |
+| Render PostgreSQL | Starter plan, 1GB RAM | $7 |
+| Redis Cloud | 250MB, shared | $0 (free tier) |
+| Appwrite Cloud Pro | 100K MAU, 50GB storage | $15 |
 | Amazon Bedrock | 1M tokens/month | $50 |
-| **Total** | | **~$495/month** |
+| **Total** | | **~$134-162/month** |
 
 **Scaling Considerations**:
 
-- 1M users: ~$2,000/month
-- 10M users: ~$8,000/month
+- 500K users: ~$300/month
+- 1M users: ~$500/month
+- 10M users: ~$2,000/month
 
 ---
 
@@ -2600,7 +2739,7 @@ CORS_ORIGINS=https://fixithub.gov.in
 #### 9.1.2 Architecture Extension
 
 ```
-IoT Devices → AWS IoT Core → Lambda → API → Database
+IoT Devices → MQTT Broker → Celery Workers → API → Database
 ```
 
 **Benefits**:
@@ -2621,7 +2760,7 @@ IoT Devices → AWS IoT Core → Lambda → API → Database
 #### 9.2.2 ML Pipeline
 
 ```
-Historical Data → Feature Engineering → Model Training (SageMaker) → 
+Historical Data → Feature Engineering → Model Training (External ML Platform) → 
 Model Deployment → Inference API → Dashboard
 ```
 
@@ -2661,15 +2800,15 @@ GROUP BY ward;
 
 #### 9.4.2 SMS Gateway Integration
 
-- **Service**: AWS SNS or Twilio
-- **Flow**: SMS → Gateway → Lambda → API → Database
+- **Service**: Twilio or similar SMS gateway
+- **Flow**: SMS → Gateway → Celery Worker → API → Database
 - **Response**: Confirmation SMS with issue ID
 
 #### 9.4.3 Voice Call Support
 
 - **IVR System**: Interactive Voice Response for illiterate users
 - **Language Support**: Regional language voice prompts
-- **Recording**: Voice description converted to text via AWS Transcribe
+- **Recording**: Voice description converted to text via external speech-to-text API
 
 ### 9.5 Mobile Application Expansion
 
@@ -2785,27 +2924,24 @@ GROUP BY ward;
 
 - **Primary**: Amazon Bedrock (Claude/Titan)
 - **Alternative**: OpenAI API, Anthropic API
-- **Translation**: AWS Translate (fallback)
-- **ML Training**: AWS SageMaker (future)
+- **ML Training**: External ML platforms (future)
 
 ### 10.5 Infrastructure
 
-- **Cloud Provider**: AWS
-- **Compute**: EC2 or App Runner
-- **Load Balancer**: Application Load Balancer
-- **CDN**: CloudFront
-- **DNS**: Route 53
-- **Monitoring**: CloudWatch
-- **Secrets**: AWS Secrets Manager
-- **IaC**: Terraform or CloudFormation
+- **Frontend Hosting**: Vercel
+- **Backend Hosting**: Render
+- **Backend Services**: Appwrite Cloud 1.5
+- **CDN**: Vercel Edge Network + Appwrite CDN
+- **Monitoring**: Prometheus 2.48 + Grafana 10.2
+- **Logging**: Render Logs (structured JSON)
 
 ### 10.6 DevOps
 
 - **Version Control**: Git (GitHub/GitLab)
-- **CI/CD**: GitHub Actions or GitLab CI
+- **CI/CD**: GitHub Actions with Vercel + Render integrations
 - **Containerization**: Docker
-- **Container Registry**: AWS ECR
-- **Orchestration**: ECS or Kubernetes (optional)
+- **Container Registry**: Render (automatic)
+- **Orchestration**: Render service management
 
 ---
 
@@ -2892,8 +3028,8 @@ GROUP BY ward;
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | AI service downtime | High | Fallback to manual classification, queue for retry |
-| Database failure | Critical | Multi-AZ deployment, automated backups, read replicas |
-| S3 outage | Medium | Retry logic, temporary local storage |
+| Database failure | Critical | Multi-region deployment, automated backups, read replicas |
+| Appwrite Storage outage | Medium | Retry logic, temporary local storage |
 | High traffic spikes | Medium | Auto-scaling, CDN caching, rate limiting |
 | Security breach | Critical | Regular audits, penetration testing, encryption |
 
@@ -2956,7 +3092,7 @@ The FixIt Hub platform represents a comprehensive, AI-powered solution for moder
 
 4. **Executive-Ready Insights**: AI-generated weekly reports transform raw data into actionable intelligence for decision-makers.
 
-5. **Cloud-Native Scalability**: AWS-based architecture ensures the platform can scale from pilot cities to nationwide deployment.
+5. **Cloud-Native Scalability**: Modern cloud architecture (Vercel + Render + Appwrite) ensures the platform can scale from pilot cities to nationwide deployment.
 
 ### Implementation Readiness
 
@@ -2988,14 +3124,13 @@ This platform has the potential to transform civic engagement in India, creating
 - **CDN**: Content Delivery Network
 - **CORS**: Cross-Origin Resource Sharing
 - **CRUD**: Create, Read, Update, Delete
-- **EC2**: Elastic Compute Cloud
+- **CDN**: Content Delivery Network
 - **JWT**: JSON Web Token
 - **ML**: Machine Learning
 - **ORM**: Object-Relational Mapping
 - **RBAC**: Role-Based Access Control
-- **RDS**: Relational Database Service
 - **REST**: Representational State Transfer
-- **S3**: Simple Storage Service
+- **Appwrite Storage**: Cloud-based object storage service
 - **SQL**: Structured Query Language
 - **SSL/TLS**: Secure Sockets Layer / Transport Layer Security
 - **UUID**: Universally Unique Identifier
@@ -3023,7 +3158,7 @@ This platform has the potential to transform civic engagement in India, creating
 
 ### Reports
 
-- `POST /api/v1/reports/generate` - Generate weekly report (admin)
+- `POST /api/v1/reports/generate` - Generate weekly report (officer)
 - `GET /api/v1/reports/latest` - Get latest report
 - `GET /api/v1/reports` - List all reports
 - `GET /api/v1/reports/{id}` - Get specific report

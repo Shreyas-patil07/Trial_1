@@ -44,7 +44,7 @@ This enables proactive governance instead of reactive complaint handling.
 
 ### 👤 User Roles
 - **Public/Citizen** - Report issues, track status, reopen resolved issues
-- **Officer** - Resolve issues, manage territory, customize reports by location and issue type  
+- **Officer** - Choose location to view nearby issues, resolve issues, customize reports by location and issue type  
 
 ### 📝 Issue Reporting
 - Title and description  
@@ -54,38 +54,39 @@ This enables proactive governance instead of reactive complaint handling.
 - AI translation and classification
 - Territory-aware automatic routing
 
-### 🗺️ Territory-Based Issue Management
+### 🗺️ Location-Based Issue Management
 
-FixIt Hub solves the critical problem of manual complaint routing through intelligent geographic jurisdiction mapping.
+FixIt Hub enables officers to efficiently manage issues by choosing their working location and viewing nearby issues.
 
 **The Problem:**
 - Officials waste time filtering irrelevant complaints
 - Manual forwarding between departments causes delays
 - Duplicate complaints from the same area
-- No accountability for specific territories
+- No visibility of nearby issues
 
 **Our Solution:**
-Every issue is automatically:
-- Geotagged with precise GPS coordinates
-- Mapped to administrative territories (ward/district/zone)
-- Routed to the responsible authority
-- Filtered so officials only see their jurisdiction
+Officers can:
+- Choose their current location on the map
+- View all issues within a selected radius (500m, 1km, 5km, 10km)
+- See issues sorted by distance, priority, and status
+- Work on issues in their vicinity efficiently
 
 **Key Features:**
 
-1. **Automatic Jurisdiction Detection**
-   - Point-in-polygon spatial queries
-   - Instant routing to correct authority
-   - No manual forwarding required
+1. **Location-Based Issue Discovery**
+   - Officers select their working location
+   - System shows all nearby issues within chosen radius
+   - Real-time distance calculation from officer's location
+   - No pre-assigned territories required
 
 2. **Smart Filtering for Citizens**
    - View nearby issues (within radius)
    - Sort by distance, severity, status
    - Prevent duplicate reporting
 
-3. **Territory Dashboard for Officials**
-   - See only issues in assigned jurisdiction
-   - Filter by territory, department, priority
+3. **Officer Dashboard**
+   - Choose location to view nearby issues
+   - Filter by distance, category, priority, status
    - Geographic heatmaps and clusters
    - **Customize reports by location and issue type**
    - **Export filtered reports (PDF, CSV, Excel)**
@@ -97,8 +98,8 @@ Every issue is automatically:
    - Data-driven resource allocation
 
 **Benefits:**
-- ⚡ Faster resolution (no manual routing)
-- 🎯 Clear accountability per territory
+- ⚡ Flexible officer assignment
+- 🎯 Officers work on nearby issues efficiently
 - 📊 Data-driven governance insights
 - 🚫 Reduced duplicate complaints
 - 🔍 Transparent issue tracking by area  
@@ -167,7 +168,7 @@ FixIt Hub uses **Appwrite Cloud 1.5** for:
 - **User Authentication** - Secure role-based access control with JWT
 - **Database** - NoSQL document database with real-time sync
 - **File Storage** - Issue images and proof photos with CDN delivery
-- **Role-based Access Control** - Citizen, Officer, and Admin permissions
+- **Role-based Access Control** - Public/Citizen and Officer permissions
 
 ### Geospatial Architecture
 - **PostgreSQL 15.5** - Stable production-ready database
@@ -304,7 +305,7 @@ Multi-layered protection system:
 - **Phone Verification**: OTP-based verification for new accounts
 - **Reporter Reputation Score**: Based on resolution success rate
 - **Behavioral Analysis**: Flags suspicious patterns
-- **Admin Review Queue**: Low-reputation submissions require approval
+- **Officer Review Queue**: Low-reputation submissions require approval
 
 ```python
 def check_spam_indicators(user, issue):
@@ -364,28 +365,35 @@ async function syncPendingIssues() {
 }
 ```
 
-### 7. Smart Territory Routing
+### 7. Location-Based Issue Discovery for Officers
 
-Automatic officer assignment with escalation:
+Officers choose their working location and view nearby issues:
 
-- **Primary Assignment**: Based on territory boundaries
-- **Workload Balancing**: Distributes to least-busy officer
-- **Escalation Rules**: Auto-escalate if unresolved > 7 days
-- **Department Routing**: Category-based department assignment
-- **Holiday Coverage**: Automatic reassignment during leave
+- **Location Selection**: Officers select their current location on map
+- **Radius Selection**: Choose viewing radius (500m, 1km, 5km, 10km)
+- **Distance Sorting**: Issues sorted by distance from officer's location
+- **Priority Filtering**: Filter by category, status, and priority
+- **Flexible Assignment**: Officers can work on any nearby issue
 
 ```python
-def assign_officer(issue):
-    territory = find_territory(issue.location)
-    officers = get_available_officers(territory)
+def get_nearby_issues(officer_location, radius_km):
+    """
+    Get all issues within radius of officer's chosen location
+    """
+    issues = db.issues.find({
+        'status': {'$in': ['OPEN', 'IN_PROGRESS']},
+        'location': {
+            '$near': {
+                '$geometry': {
+                    'type': 'Point',
+                    'coordinates': [officer_location.lng, officer_location.lat]
+                },
+                '$maxDistance': radius_km * 1000  # Convert to meters
+            }
+        }
+    }).sort('distance', 1)  # Sort by nearest first
     
-    # Load balancing
-    officer = min(officers, key=lambda o: o.active_issue_count)
-    
-    # Set escalation timer
-    schedule_escalation(issue.id, days=7, escalate_to=territory.supervisor)
-    
-    return officer
+    return issues
 ```
 
 ### 8. Officer Report Customization
@@ -863,8 +871,8 @@ FixIt Hub is developed by a multidisciplinary team focused on scalable backend s
 
 ### Members :
 
-- Repo Owner : [**Shreyas Patil**](https://github.com//Shreyas-patil07)
-- Member : [Rijul Singh](https://github.com//Rijuls-code)
+- Repo Owner : [**Rijul Singh**](https://github.com//Rijuls-code)
+- Backend : [Shreyas Patil](https://github.com//Shreyas-patil07)
 - Member : [Vedant Sawant](https://github.com//vedantsawant2803-cloud)
 - Member : [Nidhi Nikam](https://github.com//Nidhi194)
 
@@ -965,7 +973,5 @@ issues_resolved_total{ward="K_EAST"}
 ## 📄 License
 
 MIT License
-
-
 
 

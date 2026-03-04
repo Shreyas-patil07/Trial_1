@@ -123,7 +123,7 @@ FixIt Hub is a cloud-native, AI-powered civic intelligence platform that:
 5. **Enables** transparent resolution tracking with proof-based verification
 6. **Empowers** citizens with controlled reopen capabilities
 7. **Generates** executive-ready AI summaries for decision makers
-8. **Scales** nationally using AWS cloud infrastructure
+8. **Scales** nationally using modern cloud infrastructure (Vercel + Render + Appwrite Cloud)
 
 ### 3.2 Key Innovations
 
@@ -165,45 +165,45 @@ flowchart LR
 
 ### 4.1 Territory-Based Issue Management Module
 
-#### 4.1.1 Territory Definition and Mapping
+#### 4.1.1 Location-Based Issue Discovery for Officers
 
-**FR-1.1** [P0] The system shall support definition of administrative territories (wards, districts, zones).
+**FR-1.1** [P0] The system shall allow officers to select their current working location on a map.
 
-**FR-1.2** [P0] The system shall store territory boundaries as geographic polygons (GeoJSON format).
+**FR-1.2** [P0] The system shall allow officers to choose viewing radius (500m, 1km, 5km, 10km).
 
-**FR-1.3** [P0] The system shall allow officers to create and manage territory definitions.
+**FR-1.3** [P0] The system shall display all issues within the selected radius from officer's location.
 
-**FR-1.4** [P1] The system shall support multiple territory types:
-- Ward
-- District
-- Municipality Zone
-- Department Jurisdiction
+**FR-1.4** [P0] The system shall calculate and display distance from officer's location to each issue.
 
-**FR-1.5** [P1] The system shall assign unique territory codes (e.g., K_EAST, ZONE_7).
+**FR-1.5** [P0] The system shall sort issues by distance (nearest first) by default.
 
-**FR-1.6** [P1] The system shall allow assignment of officers to specific territories.
+**FR-1.6** [P1] The system shall allow officers to filter nearby issues by:
+- Category
+- Status
+- Priority level
+- Date range
 
-**FR-1.7** [P1] The system shall support multiple officers per territory.
+**FR-1.7** [P1] The system shall update issue list when officer changes location or radius.
 
-**FR-1.8** [P2] The system shall store territory metadata (population, area, contact info).
+**FR-1.8** [P2] The system shall remember officer's last selected location and radius.
 
-#### 4.1.2 Automatic Jurisdiction Detection
+#### 4.1.2 Geographic Issue Storage
 
-**FR-1.9** [P0] The system shall perform point-in-polygon spatial query when issue is submitted.
+**FR-1.9** [P0] The system shall store issue location as GPS coordinates (latitude, longitude).
 
-**FR-1.10** [P0] The system shall automatically detect which territory contains the issue coordinates.
+**FR-1.10** [P0] The system shall perform reverse geocoding to obtain human-readable address.
 
-**FR-1.11** [P0] The system shall automatically assign issue to the territory's designated officer.
+**FR-1.11** [P0] The system shall extract ward/zone information from coordinates.
 
-**FR-1.12** [P1] The system shall update issue record with territory information (ward, territory_id).
+**FR-1.12** [P1] The system shall create geospatial index on issue locations for fast proximity queries.
 
-**FR-1.13** [P1] The system shall mark issue as "auto_assigned" when automatic routing succeeds.
+**FR-1.13** [P1] The system shall support radius-based queries for finding nearby issues.
 
-**FR-1.14** [P1] The system shall assign to officer for manual routing if no territory match found.
+**FR-1.14** [P1] The system shall calculate distance between two coordinates using Haversine formula.
 
-**FR-1.15** [P1] The system shall notify assigned officer immediately upon auto-assignment.
+**FR-1.15** [P2] The system shall cache reverse geocoding results to reduce API calls.
 
-**FR-1.16** [P2] The system shall log all territory assignment operations for audit.
+**FR-1.16** [P2] The system shall log all location-based queries for analytics.
 
 #### 4.1.3 Territory-Based Filtering for Citizens
 
@@ -227,30 +227,29 @@ flowchart LR
 
 **FR-1.24** [P2] The system shall allow citizens to filter issues by their ward/territory.
 
-#### 4.1.4 Territory-Based Dashboard for Officials
+#### 4.1.4 Location-Based Dashboard for Officers
 
-**FR-1.25** [P0] The system shall provide jurisdiction-filtered dashboard for officers.
+**FR-1.25** [P0] The system shall provide location-based dashboard for officers.
 
-**FR-1.26** [P0] The system shall display only issues within officer's assigned territory by default.
+**FR-1.26** [P0] The system shall display interactive map with officer's selected location marker.
 
-**FR-1.27** [P0] The system shall show territory summary statistics:
-- Total open issues in territory
+**FR-1.27** [P0] The system shall show summary statistics for issues within selected radius:
+- Total open issues
 - In-progress issues
 - Critical priority count
 - Resolved this week
 
-**FR-1.28** [P1] The system shall allow officers to filter by:
-- Territory/ward
-- Department
+**FR-1.28** [P1] The system shall allow officers to filter nearby issues by:
+- Category
 - Status
 - Priority level
 - Time range
 
-**FR-1.29** [P1] The system shall provide "My Territory Only" toggle filter.
+**FR-1.29** [P1] The system shall provide "Nearby Issues" list view with distance information.
 
-**FR-1.30** [P1] The system shall allow officers to view all territories or filter by assigned territories.
+**FR-1.30** [P1] The system shall allow officers to switch between map view and list view.
 
-**FR-1.31** [P2] The system shall display territory performance metrics (avg resolution time, resolution rate).
+**FR-1.31** [P2] The system shall display performance metrics for officer's resolved issues.
 
 #### 4.1.5 Proximity Intelligence and Clustering
 
@@ -314,10 +313,10 @@ flowchart LR
 
 **FR-2.2** [P0] The system shall require the following fields during registration:
 
-- Email address (unique)
-- Phone number (required for verification)
-- Full name
-- Password (minimum 8 characters)
+- Email address (required, unique)
+- Full name (required)
+- Mobile number (required, unique, for verification)
+- Password (required, minimum 8 characters)
 
 **FR-2.3** [P1] The system shall validate email format and uniqueness before registration.
 
@@ -327,27 +326,34 @@ flowchart LR
 
 **FR-2.6** [P1] The system shall allow government officers to register with additional fields:
 
-- Department
-- Territory assignment (multiple territories supported)
-- Government email domain
+- Department (required)
+- Government email domain (preferred but not mandatory)
 
 **FR-2.7** [P1] The system shall require officer verification via government email or existing officer approval.
 
 #### 4.2.2 User Authentication
 
-**FR-2.8** [P0] The system shall authenticate users using email and password.
+**FR-2.8** [P0] The system shall support two login methods:
+- Email/Phone + Password
+- Email/Phone + OTP (one-time password)
 
 **FR-2.9** [P0] The system shall issue JWT access tokens with 15-minute expiry upon successful login.
 
 **FR-2.10** [P0] The system shall issue JWT refresh tokens with 7-day expiry for token renewal.
 
-**FR-1.11** [P1] The system shall support token refresh without requiring re-authentication.
+**FR-2.11** [P0] The system shall send 6-digit OTP via SMS for OTP-based login.
 
-**FR-1.12** [P1] The system shall invalidate tokens upon user logout.
+**FR-2.12** [P0] The system shall validate OTP within 10-minute expiry window.
 
-**FR-1.13** [P2] The system shall implement account lockout after 5 failed login attempts within 15 minutes.
+**FR-2.13** [P0] The system shall invalidate OTP after successful login or expiry.
 
-**FR-1.14** [P2] The system shall provide password reset functionality via email.
+**FR-2.14** [P1] The system shall support token refresh without requiring re-authentication.
+
+**FR-2.15** [P1] The system shall invalidate tokens upon user logout.
+
+**FR-2.16** [P2] The system shall implement account lockout after 5 failed login attempts within 15 minutes.
+
+**FR-2.17** [P2] The system shall provide password reset functionality via email or OTP.
 
 #### 4.1.3 Role-Based Access Control
 
@@ -513,7 +519,7 @@ flowchart LR
 
 **FR-3.18** [P1] The system shall queue failed AI requests for retry when service recovers.
 
-**FR-3.19** [P1] The system shall log all AI processing failures to CloudWatch.
+**FR-3.19** [P1] The system shall log all AI processing failures to Render Logs.
 
 **FR-3.20** [P2] The system shall send alerts if AI failure rate exceeds 10%.
 
@@ -752,7 +758,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **FR-7.1** [P0] The system shall automatically generate weekly reports every Monday at 2:00 AM IST.
 
-**FR-7.2** [P1] The system shall use AWS EventBridge or equivalent for scheduling.
+**FR-7.2** [P1] The system shall use Celery Beat for scheduling.
 
 **FR-7.3** [P1] The system shall allow officers to manually trigger report generation.
 
@@ -1068,7 +1074,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **NFR-2.5** [P1] The system shall support horizontal scaling of backend services.
 
-**NFR-2.6** [P1] The system shall use AWS Auto Scaling Groups for automatic scaling.
+**NFR-2.6** [P1] The system shall use Render auto-scaling for automatic scaling.
 
 **NFR-2.7** [P1] The system shall scale backend instances based on CPU utilization (target: 70%).
 
@@ -1096,7 +1102,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 - Issue creation: 10 requests/hour per user
 - General API: 100 requests/minute per user
 
-**NFR-3.7** [P1] The system shall store JWT secret keys in AWS Secrets Manager.
+**NFR-3.7** [P1] The system shall store JWT secret keys in environment variables (Render secrets).
 
 **NFR-3.8** [P1] The system shall store sensitive configuration in environment variables.
 
@@ -1168,7 +1174,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **NFR-6.2** [P1] The system shall log all API requests with request ID, user ID, endpoint, and duration.
 
-**NFR-6.3** [P1] The system shall send logs to AWS CloudWatch Logs.
+**NFR-6.3** [P1] The system shall send logs to Render Logs.
 
 **NFR-6.4** [P1] The system shall implement centralized error tracking.
 
@@ -1226,21 +1232,21 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 ### 5.9 Monitoring & Observability Requirements
 
-**NFR-9.1** [P1] The system shall send metrics to AWS CloudWatch:
+**NFR-9.1** [P1] The system shall send metrics to Prometheus:
 
 - API request count and latency
 - Error rates by endpoint
 - Database connection pool usage
 - AI processing success rate
 
-**NFR-9.2** [P1] The system shall configure CloudWatch alarms for:
+**NFR-9.2** [P1] The system shall configure Grafana alerts for:
 
 - API error rate > 5%
 - Database connection failures
 - AI service unavailability > 5 minutes
 - Disk usage > 80%
 
-**NFR-9.3** [P1] The system shall send critical alerts to SNS topic for officer notification.
+**NFR-9.3** [P1] The system shall send critical alerts to officer notification channels (Email/Slack).
 
 **NFR-9.4** [P1] The system shall provide health check endpoint returning system status.
 
@@ -1311,7 +1317,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **ASM-3** Government officers have verified government email addresses for registration.
 
-**ASM-4** AWS services (RDS, S3, EC2) maintain 99.9%+ availability as per SLA.
+**ASM-4** Cloud services (Vercel, Render, Appwrite) maintain 99.9%+ availability as per SLA.
 
 **ASM-5** AI service (Bedrock/OpenAI) maintains 99%+ availability.
 
@@ -1365,7 +1371,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **AC-2.1** A citizen can create an issue with title, description, location, and image.
 
-**AC-2.2** Image uploads to S3 successfully and URL is stored in database.
+**AC-2.2** Image uploads to Appwrite Storage successfully and URL is stored in database.
 
 **AC-2.3** Location coordinates are captured and ward is auto-assigned.
 
@@ -1389,7 +1395,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **AC-4.1** An officer can mark an issue as resolved with proof photo and notes.
 
-**AC-4.2** Resolution proof photo is uploaded to S3 and displayed to citizen.
+**AC-4.2** Resolution proof photo is uploaded to Appwrite Storage and displayed to citizen.
 
 **AC-4.3** Resolution timestamp and officer ID are recorded.
 
@@ -1515,7 +1521,7 @@ w1 = 0.35, w2 = 0.30, w3 = 0.25, w4 = 0.10
 
 **AC-10.7** Unauthorized API access returns 401/403 status codes.
 
-**AC-10.8** S3 presigned URLs expire after 15 minutes.
+**AC-10.8** Appwrite Storage presigned URLs expire after 15 minutes.
 
 ### 8.11 Deployment Acceptance Criteria
 
@@ -1551,9 +1557,9 @@ The following features are identified for future development phases and are not 
 
 **FE-1.4** Connect IoT-enabled streetlights for automatic failure reporting.
 
-**FE-1.5** Implement AWS IoT Core for device management and data ingestion.
+**FE-1.5** Implement MQTT broker for device management and data ingestion.
 
-**FE-1.6** Create Lambda functions to process IoT sensor data and create issues automatically.
+**FE-1.6** Create Celery workers to process IoT sensor data and create issues automatically.
 
 **FE-1.7** Provide dashboard for IoT device health monitoring.
 
@@ -1569,7 +1575,7 @@ The following features are identified for future development phases and are not 
 
 **FE-2.5** Implement seasonal pattern detection (monsoon-related issues).
 
-**FE-2.6** Use AWS SageMaker for model training and deployment.
+**FE-2.6** Use external ML platform for model training and deployment.
 
 **FE-2.7** Create inference API for real-time predictions.
 
@@ -1595,9 +1601,9 @@ The following features are identified for future development phases and are not 
 
 **FE-4.2** Define SMS format: `REPORT <category> <location> <description>`.
 
-**FE-4.3** Integrate AWS SNS or Twilio for SMS gateway.
+**FE-4.3** Integrate Twilio or similar SMS gateway.
 
-**FE-4.4** Create Lambda function to parse SMS and create issues.
+**FE-4.4** Create Celery worker to parse SMS and create issues.
 
 **FE-4.5** Send confirmation SMS with issue ID to reporter.
 
@@ -1605,7 +1611,7 @@ The following features are identified for future development phases and are not 
 
 **FE-4.7** Implement IVR (Interactive Voice Response) system for voice reporting.
 
-**FE-4.8** Use AWS Transcribe to convert voice to text.
+**FE-4.8** Use external speech-to-text API to convert voice to text.
 
 **FE-4.9** Support regional language voice prompts.
 
@@ -1717,7 +1723,7 @@ The following features are identified for future development phases and are not 
 
 **FE-10.4** Provide blockchain verification for citizens.
 
-**FE-10.5** Use AWS Managed Blockchain or Hyperledger Fabric.
+**FE-10.5** Use Hyperledger Fabric or similar blockchain platform.
 
 ---
 
@@ -1770,7 +1776,7 @@ The following metrics will be used to measure the success of the platform:
 |------|-------------|--------|------------|
 | AI service downtime | Medium | High | Implement fallback mechanisms, queue for retry |
 | Database failure | Low | Critical | Multi-AZ deployment, automated backups |
-| S3 outage | Low | Medium | Retry logic, temporary local storage |
+| Storage outage | Low | Medium | Retry logic, temporary local storage |
 | High traffic spikes | Medium | Medium | Auto-scaling, CDN caching, rate limiting |
 | Security breach | Low | Critical | Regular audits, penetration testing, encryption |
 | Data loss | Low | Critical | Automated backups, point-in-time recovery |
@@ -1811,7 +1817,7 @@ The following metrics will be used to measure the success of the platform:
 
 - Test API endpoints with various inputs
 - Test database operations (CRUD)
-- Test S3 upload/download operations
+- Test Appwrite Storage upload/download operations
 - Test AI service integration
 - Test authentication and authorization flows
 
